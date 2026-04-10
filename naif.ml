@@ -17,17 +17,10 @@ open Chaines
 (*                                                                            *)
 (******************************************************************************)
 let encoder_lettre map c =
-  (* Fonction auxiliaire pour trouver l'index d'un caractère dans une liste *)
-  let rec index i = function
-    | [] -> None
-    | x :: _ when x = c -> Some i
-    | _ :: tl -> index (i + 1) tl
-  in
-  (* Utilisation de List.find_map pour trouver la touche et la position en un seul passage *)
-  match List.find_map (fun (touche, chars) ->
-    match index 1 chars with
-    | Some pos -> Some (touche, pos)
-    | None -> None
+  match List.find_map (fun (touch, chars) ->
+    (* List.find_index commence à 0, on ajoute 1 pour le nombre d'appuis *)
+    List.find_index (( = ) c) chars
+    |> Option.map (fun idx -> (touch, idx + 1))
   ) map with
   | Some res -> res
   | None -> failwith "encoder_lettre : caractère non trouvé dans l'encodage"
