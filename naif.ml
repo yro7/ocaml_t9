@@ -25,7 +25,26 @@ let encoder_lettre map c =
   | Some res -> res
   | None -> failwith "encoder_lettre : caractère non trouvé dans l'encodage"
 
+(******************************************************************************)
+(*                                                                            *)
+(*      fonction d'encodage pour un mot                                       *)
+(*                                                                            *)
+(*   signature : encoder_mot : encodage -> string -> int list = <fun>         *)
+(*                                                                            *)
+(*   paramètre(s) : un encodage (liste associative) et un mot (chaîne)        *)
+(*   résultat     : la suite de touches à presser (entiers)                   *)
+(*                                                                            *)
+(******************************************************************************)
+let encoder_mot map mot =
+  let chars = decompose_chaine mot in
+  List.concat_map (fun c ->
+    let (touche, nb) = encoder_lettre map c in
+    List.init nb (fun _ -> touche) @ [0]
+  ) chars
+
 (* Tests unitaires *)
+
+(* Fonction  encoder_lettre *)
 let%test _ = encoder_lettre t9_map 'a' = (2, 1)
 let%test _ = encoder_lettre t9_map 'b' = (2, 2)
 let%test _ = encoder_lettre t9_map 'c' = (2, 3)
@@ -39,3 +58,11 @@ let%test _ = encoder_lettre stupide_map 'a' = (2, 1)
 let%test _ = encoder_lettre stupide_map 'e' = (2, 2)
 let%test _ = encoder_lettre stupide_map 'b' = (3, 1)
 let%test _ = encoder_lettre stupide_map 'z' = (3, 20)
+
+(* Fonction encoder_mot *)
+
+let%test _ = encoder_mot t9_map "abc" = [2; 0; 2; 2; 0; 2; 2; 2; 0]
+let%test _ = encoder_mot t9_map "bonjour" = [2; 2; 0; 6; 6; 6; 0; 6; 6; 0; 5; 0; 6; 6; 6; 0; 8; 8; 0; 7; 7; 7; 0]
+let%test _ = encoder_mot stupide_map "ae" = [2; 0; 2; 2; 0]
+
+
