@@ -36,6 +36,7 @@ let encoder_lettre map c =
 (******************************************************************************)
 let encoder_mot map mot =
   let chars = decompose_chaine mot in
+  (* concat_map map chaque caractère à sa séquence, puis concatène toutes séquences *)
   List.concat_map (fun c ->
     let (touche, nb_pressions) = encoder_lettre map c in
     List.init nb_pressions (fun _ -> touche) @ [0]
