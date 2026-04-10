@@ -37,8 +37,8 @@ let encoder_lettre map c =
 let encoder_mot map mot =
   let chars = decompose_chaine mot in
   List.concat_map (fun c ->
-    let (touche, nb) = encoder_lettre map c in
-    List.init nb (fun _ -> touche) @ [0]
+    let (touche, nb_pressions) = encoder_lettre map c in
+    List.init nb_pressions (fun _ -> touche) @ [0]
   ) chars
 
 (* Tests unitaires *)
