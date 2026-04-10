@@ -18,9 +18,8 @@ open Chaines
 (******************************************************************************)
 let encoder_lettre map c =
   match List.find_map (fun (touch, chars) ->
-    (* List.find_index commence à 0, on ajoute 1 pour le nombre d'appuis *)
-    List.find_index (( = ) c) chars
-    |> Option.map (fun idx -> (touch, idx + 1))
+    List.find_index (( = ) c) chars (* Trouve la position du caractère dans la map (0-indexé, d'où idx + 1 ci-dessous) *)
+    |> Option.map (fun idx -> (touch, idx + 1)) (* On renvoie le couple associé (touche, nb_appuis) *)
   ) map with
   | Some res -> res
   | None -> failwith "encoder_lettre : caractère non trouvé dans l'encodage"
