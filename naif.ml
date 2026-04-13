@@ -42,6 +42,27 @@ let encoder_mot map mot =
     List.init nb_pressions (fun _ -> touche) @ [0]
   ) chars
 
+
+
+(******************************************************************************)
+(*                                                                            *)
+(*      fonction de décodage pour un caractère                                *)
+(*                                                                            *)
+(*   signature : decoder_lettre : encodage -> (int * int) -> char = <fun>     *)
+(*                                                                            *)
+(*   paramètre(s) : un encodage et un couple (touche, nb_pressions)           *)
+(*   résultat     : le caractère correspondant                                *)
+(*                                                                            *)
+(******************************************************************************)
+let decoder_lettre map (touche, nb_pressions) =
+  match List.assoc_opt touche map with
+  | None -> failwith "decoder_lettre : touche inexistante"
+  | Some lettres -> 
+      match List.nth_opt lettres (nb_pressions - 1) with
+      | Some c -> c
+      | None -> failwith "decoder_lettre : nombre de pressions invalide"
+
+
 (* Tests unitaires *)
 
 (* Fonction  encoder_lettre *)
@@ -64,5 +85,12 @@ let%test _ = encoder_lettre stupide_map 'z' = (3, 20)
 let%test _ = encoder_mot t9_map "abc" = [2; 0; 2; 2; 0; 2; 2; 2; 0]
 let%test _ = encoder_mot t9_map "bonjour" = [2; 2; 0; 6; 6; 6; 0; 6; 6; 0; 5; 0; 6; 6; 6; 0; 8; 8; 0; 7; 7; 7; 0]
 let%test _ = encoder_mot stupide_map "ae" = [2; 0; 2; 2; 0]
+
+(* Fonction decoder_lettre *)
+let%test _ = decoder_lettre t9_map (2, 1) = 'a'
+let%test _ = decoder_lettre t9_map (2, 2) = 'b'
+let%test _ = decoder_lettre t9_map (6, 3) = 'o'
+let%test _ = decoder_lettre stupide_map (2, 5) = 'u'
+
 
 
