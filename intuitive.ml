@@ -127,6 +127,130 @@ let creer_dico map chemin =
     ) empty ic
   )
 
+
+(******************************************************************************)
+(*                                                                            *)
+(*                Supprimer un mot du dictionnaire (4.4)                      *)
+(*                                                                            *)
+(*   signature : supprimer : encodage -> dico -> string -> dico = <fun>       *)
+(*                                                                            *)
+(*   paramètre(s) : un encodage, un dictionnaire, un mot                      *)
+(*   résultat     : le nouveau dictionnaire sans le mot                       *)
+(*                                                                            *)
+(******************************************************************************)
+let supprimer map dico mot =
+  let touches = encoder_mot map mot in
+  let rec aux (Noeud (mots, fils)) ts =
+    match ts with
+    | [] -> 
+        (* On enlève le mot de la liste des mots du noeud *)
+        let nouveaux_mots = List.filter (fun m -> m <> mot) mots in
+        Noeud (nouveaux_mots, fils)
+    | t :: reste ->
+        match List.assoc_opt t fils with
+        | None -> Noeud (mots, fils) (* Le mot n'est pas dans le dictionnaire *)
+        | Some sd ->
+            let nouveau_sous_dico = aux sd reste in
+            (* pruning : si le sous dico est vide, on le supprime *)
+            let nouveaux_fils = 
+              match nouveau_sous_dico with
+              | Noeud ([], []) -> List.remove_assoc t fils
+              | _ -> (t, nouveau_sous_dico) :: (List.remove_assoc t fils)
+            in
+            Noeud (mots, nouveaux_fils)
+  in
+  aux dico touches
+
+
+(******************************************************************************)
+(*                                                                            *)
+(*                  Vérifier l'appartenance d'un mot (4.5)                    *)
+(*                                                                            *)
+(*   signature : appartient : encodage -> dico -> string -> bool = <fun>      *)
+(*                                                                            *)
+(*   paramètre(s) : un encodage, un dictionnaire, un mot                      *)
+(*   résultat     : vrai si le mot est dans le dictionnaire, faux sinon       *)
+(*                                                                            *)
+(******************************************************************************)
+let appartient map dico mot =
+  let touches = encoder_mot map mot in
+  let rec aux (Noeud (mots, fils)) ts =
+    match ts with
+    | [] -> List.mem mot mots
+    | t :: reste ->
+        match List.assoc_opt t fils with
+        | None -> false
+        | Some sd -> aux sd reste
+  in
+  aux dico touches
+
+
+(******************************************************************************)
+(*                                                                            *)
+(*                 Vérifier la cohérence du dictionnaire (4.6)                *)
+(*                                                                            *)
+(*   signature : coherent : encodage -> dico -> bool = <fun>                  *)
+(*                                                                            *)
+(*   paramètre(s) : un encodage, un dictionnaire                              *)
+(*   résultat     : vrai si le dictionnaire est cohérent, faux sinon          *)
+(*                                                                            *)
+(******************************************************************************)
+let coherent map dico =
+  let rec aux (Noeud (mots, fils)) chemin =
+    (* Tous les mots du noeud doivent avoir le code correspondant au chemin *)
+    let mots_coherents = List.for_all (fun m -> 
+      try encoder_mot map m = List.rev chemin
+      with Failure _ -> false
+    ) mots in
+    if not mots_coherents then false
+    else
+      (* Tous les fils doivent être cohérents *)
+      List.for_all (fun (t, sd) -> aux sd (t :: chemin)) fils
+  in
+  aux dico []
+
+(* Tests unitaires *)
+
+
+let%test "appartient basics" =
+  let d = empty |> ajouter t9_map in
+  let d1 = d "bonjour" in
+  appartient t9_map d1 "bonjour" && not (appartient t9_map d1 "bon")
+
+let%test "supprimer and pruning" =
+  let d = empty |> ajouter t9_map in
+  let d1 = d "bon" |> (fun d -> ajouter t9_map d "bonne") in
+  let d2 = supprimer t9_map d1 "bonne" in
+  appartient t9_map d2 "bon" && not (appartient t9_map d2 "bonne") &&
+  (* On vérifie l'élagage : le noeud pour 'bonne' (touche 6 après 'bon') doit avoir disparu *)
+  match d2 with
+  | Noeud (_, [ (2, Noeud (_, [ (6, Noeud (_, [ (6, Noeud (_, f3)) ])) ])) ]) ->
+      not (List.exists (fun (t, _) -> t = 6) f3)
+  | _ -> false
+
+let%test "supprimer non-existent" =
+  let d = empty |> ajouter t9_map in
+  let d1 = d "test" in
+  let d2 = supprimer t9_map d1 "autre" in
+  d1 = d2
+
+let%test "coherent basics" =
+  let d = empty |> ajouter t9_map in
+  let d1 = d "bonjour" |> (fun d -> ajouter t9_map d "vendre") in
+  coherent t9_map d1
+
+let%test "incoherent dictionary" =
+  (* On force un dictionnaire incohérent *)
+  (* 'z' est sur la touche 9, pas la touche 2 *)
+  let d_incoherent = Noeud ([], [ (2, Noeud (["z"], [])) ]) in
+  not (coherent t9_map d_incoherent)
+
+let%test "supprimer last word" =
+  let d = empty |> ajouter t9_map in
+  let d1 = d "a" in
+  let d2 = supprimer t9_map d1 "a" in
+  d2 = empty
+
 (* Tests unitaires *)
 
 let%test _ = empty = Noeud ([], [])
@@ -188,21 +312,13 @@ let%test "duplicate words" =
           (fun d -> ajouter t9_map d "test") in
   let ts = encoder_mot t9_map "test" in
   let mots = get_node d ts in
-  (* Depending on requirements, we might want to ensure no duplicates, 
-     but current implementation adds them. Let's see if it works. *)
   List.length (List.filter (fun x -> x = "test") mots) >= 1
 
 let%test "multiple collisions same node" =
-  (* "tendre", "vendre", "vendue" all have the same T9 prefix path? 
+  (* 
      tendre: 8 3 6 3 7 3
      vendre: 8 3 6 3 7 3
-     vendue: 8 3 6 3 8 3  -- wait, r(7) vs u(8). 
-     Let's find words with same code.
-     "bon" (2 6 6) and "amphi" (2 6 7 4 4) - no.
-     "mots" (6 6 8 7) and "nous" (6 6 8 7) ?
-     m - 6, o - 6, t - 8, s - 7
-     n - 6, o - 6, u - 8, s - 7
-     YES.
+     vendue: 8 3 6 3 8 3 
   *)
   let d = empty |> 
           (fun d -> ajouter t9_map d "mots") |> 
@@ -225,13 +341,13 @@ let%test "creer_dico with malformed input" =
 let%test "unsupported characters handling" =
   try
     let _ = encoder_mot t9_map "Hello!" in
-    false (* should fail *)
+    false
   with Failure _ -> true
 
 let%test "case sensitivity" =
   try
     let _ = encoder_mot t9_map "Bon" in
-    false (* currently fails because 'B' is not in t9_map *)
+    false 
   with Failure _ -> true
 
 let%test "large dictionary simulation" =
