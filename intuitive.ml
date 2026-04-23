@@ -209,6 +209,107 @@ let coherent map dico =
   in
   aux dico []
 
+
+(******************************************************************************)
+(*                                                                            *)
+(*             Identifier les mots pour une suite de touches                  *)
+(*                                                                            *)
+(*   signature : decoder_mot : dico -> int list -> string list = <fun>        *)
+(*                                                                            *)
+(*   paramètre(s) : un dictionnaire, une suite de touches                     *)
+(*   résultat     : l'ensemble des mots correspondant à cette suite           *)
+(*                                                                            *)
+(******************************************************************************)
+let decoder_mot dico touches =
+  let rec aux (Noeud (mots, fils)) ts =
+    match ts with
+    | [] -> mots
+    | t :: reste ->
+        match List.assoc_opt t fils with
+        | None -> []
+        | Some sd -> aux sd reste
+  in
+  aux dico touches
+
+
+(******************************************************************************)
+(*                                                                            *)
+(*                Lister l'ensemble des mots d'un dictionnaire                *)
+(*                                                                            *)
+(*   signature : lister : dico -> string list = <fun>                         *)
+(*                                                                            *)
+(*   paramètre(s) : un dictionnaire                                           *)
+(*   résultat     : l'ensemble des mots du dictionnaire                       *)
+(*                                                                            *)
+(******************************************************************************)
+let rec lister (Noeud (mots, fils)) =
+  mots @ List.concat_map (fun (_, sd) -> lister sd) fils
+
+
+(******************************************************************************)
+(*                                                                            *)
+(*                Lister les mots ayant un certain préfixe                    *)
+(*                                                                            *)
+(*   signature : prefixe : dico -> int list -> string list = <fun>            *)
+(*                                                                            *)
+(*   paramètre(s) : un dictionnaire, une suite de touches (préfixe)           *)
+(*   résultat     : l'ensemble des mots dont le préfixe a été saisi           *)
+(*                                                                            *)
+(******************************************************************************)
+let prefixe dico touches =
+  let rec find_node (Noeud (_, fils) as curr) ts =
+    match ts with
+    | [] -> Some curr
+    | t :: reste ->
+        match List.assoc_opt t fils with
+        | None -> None
+        | Some sd -> find_node sd reste
+  in
+  match find_node dico touches with
+  | None -> []
+  | Some node -> lister node
+
+
+(* Tests unitaires *)
+
+let%test "decoder_mot collisions" =
+  let d = empty |> 
+          (fun d -> ajouter t9_map d "tendre") |> 
+          (fun d -> ajouter t9_map d "vendre") in
+  let ts = encoder_mot t9_map "tendre" in
+  let res = decoder_mot d ts in
+  List.mem "tendre" res && List.mem "vendre" res
+
+let%test "decoder_mot no match" =
+  let d = ajouter t9_map empty "bon" in
+  decoder_mot d [9; 9; 9] = []
+
+let%test "lister basics" =
+  let words = ["abc"; "def"; "ghi"] in
+  let d = List.fold_left (ajouter t9_map) empty words in
+  let res = lister d in
+  List.length res = 3 && List.for_all (fun w -> List.mem w res) words
+
+let%test "prefixe basics" =
+  let d = empty |> 
+          (fun d -> ajouter t9_map d "bon") |> 
+          (fun d -> ajouter t9_map d "bonne") |> 
+          (fun d -> ajouter t9_map d "bonjour") in
+  let ts_bon = encoder_mot t9_map "bon" in
+  let res = prefixe d ts_bon in
+  List.mem "bon" res && List.mem "bonne" res && List.mem "bonjour" res &&
+  List.length res = 3
+
+let%test "prefixe partial" =
+  let d = ajouter t9_map empty "bonjour" in
+  let res = prefixe d [2; 6; 6] in
+  List.mem "bonjour" res
+
+let%test "prefixe empty" =
+  let d = ajouter t9_map empty "test" in
+  prefixe d [9; 9] = []
+
+
 (* Tests unitaires *)
 
 
@@ -222,7 +323,7 @@ let%test "supprimer and pruning" =
   let d1 = d "bon" |> (fun d -> ajouter t9_map d "bonne") in
   let d2 = supprimer t9_map d1 "bonne" in
   appartient t9_map d2 "bon" && not (appartient t9_map d2 "bonne") &&
-  (* On vérifie l'élagage : le noeud pour 'bonne' (touche 6 après 'bon') doit avoir disparu *)
+  (* On vérifie le pruning : le noeud pour "bonne" (touche 6 après "bon") doit avoir disparu *)
   match d2 with
   | Noeud (_, [ (2, Noeud (_, [ (6, Noeud (_, [ (6, Noeud (_, f3)) ])) ])) ]) ->
       not (List.exists (fun (t, _) -> t = 6) f3)
@@ -240,8 +341,7 @@ let%test "coherent basics" =
   coherent t9_map d1
 
 let%test "incoherent dictionary" =
-  (* On force un dictionnaire incohérent *)
-  (* 'z' est sur la touche 9, pas la touche 2 *)
+  (* On force un dictionnaire incohérent pr tester *)
   let d_incoherent = Noeud ([], [ (2, Noeud (["z"], [])) ]) in
   not (coherent t9_map d_incoherent)
 
@@ -350,7 +450,7 @@ let%test "case sensitivity" =
     false 
   with Failure _ -> true
 
-let%test "large dictionary simulation" =
+let%test "big dictionary simulation" =
   let words = ["apple"; "apply"; "ball"; "balloon"; "cat"; "dog"; "door"; "dot"] in
   let d = List.fold_left (ajouter t9_map) empty words in
   let verify word =
